@@ -1,0 +1,112 @@
+﻿
+Thinking 1: 在实际工作中，FM和MF哪个应用的更多，为什么?
+1、能简要说明FM和MF的区别（5point）
+2、能简要说明FM在推荐系统，以及应用场景中的作用（5point）
+
+实际工作中，FM应用场景比MF更广。
+MF是FM的特例，即特征只有User ID和Item ID 的FM模型，其只适用于评分预测，进行简单的特征计算，无法利用其他特征。
+而FM引入更多辅助信息作为特征（Side Info），Wij = <Vi, Vj>作为FM核心思想，使得稀疏数据下，学习不充分的问题得到充分解决（可提供的非零样本大大增加）。
+
+FM算法的作用：
+泛化能力强，解决大规模稀疏数据下的特征组合问题，不仅是UserID, ItemID特征
+MF是FM的特例，使用了特征embedding（User，Item）。FM使用了更多Side Information作为特征，同时在进行二阶特征组合权重预估的时候，使用到了MF
+计算复杂度，可以在线性时间对样本做出预测，通过公式变换将计算复杂度降到O(k*n)
+
+FM应用场景：
+1. 回归问题：解决评分问题
+2. 分类问题：实现二分类 Label = 0 / Label = 1 (线性函数+Sigmod)
+
+以Click Through Rate (CTR) 案例为例：
+1. 这个预估属于二分类问题，特征之间的组合，是有影响的，这个相关性，线性模型是无法学习的。
+2. 通过矩阵分解，完成（i=1, j=i+1 / i: 1-n, j: i-n）特征之间组合
+2. 实际工作中，需要分析的特征远远超出客户和商品。例如季节，客户类型（性别，年龄，学历，收入，地理位置，城市分级，单身/已婚，有孩子）。
+3. 这些特征之间，存在相互关系。例如：在夏季的时候，客户对于啤酒广告的点击，会明显高于冬季。
+
+
+
+Thinking 2: FFM与FM有哪些区别？
+能简要说明区别（10point）
+
+核心区别在于是否引入“场/Field”，二者计算精度，计算速度不同。
+
+FFM离散化了一部分多分类值，计算更细，计算速度.
+
+FM算法:
+
+每个特征只有一个隐向量，属于FFM的特例.例如：WESPN * WNIKE
+
+FFM算法：
+
+通过引入field的概念，FFM把相同性质的特征归于同一个field（c），比如“Day=26/11/15”、“Day=1/7/14”、“Day=19/2/15”这三个特征代表日期，放到同一个field中。当“Day=26/11/15”与Country特征，Ad_type特征进行特征组合时，使用不同的隐向量（Field-aware），这是因为Country特征和Ad_type特征，本身的field不同
+
+每个特征有多个隐向量 (fj是第j个特征所属的field, j= [1,n]), ，使用哪一个，取决于和那个向量进行点相乘。例如：
+Publisher: ESPN,NBC,... / Advertiser: Nike,Gucci,... / Gender(G):Male,Female
+Wespn，A * Wnike,P + Wespn,G* Wmale,p + Wnike,G * Wfemal,A
+
+特征格式即关系：
+field_id:feature_id:value
+ -> field_id:feature_id -> 1:m
+ -> feature_id:value ->1:1
+
+NBA in feature 1 and feature 2, NBA(publisher) =/ NBA(advertiser)
+
+field_id代表field编号，feature_id代表特征编号，value是特征值。
+-> 如果特征为数值型，只需分配单独的field编号，比如评分，item的历史CTR/CVR等。
+   4：5：9.99 -> 4(Price = field4): 5 (Price = Feature5) : 9.99(Value数字型)
+
+-> 如果特征为分类（categorical）特征，需要经过One-Hot编码成数值型，编码产生的所有特征同属于一个field。特征值是0或1，比如性别、商品的品类id等
+   1：1:1 -> 1(User = field1):1(User-GZ = feature1):1(One-Hot)
+
+
+
+Thinking 3 DeepFM相比于FM解决了哪些问题，原理是怎样的?
+1、能说明DeepFM相比于FM有哪些改进的地方（5points）
+2、能说明DeepFM的原理，FM+DNN模型（5points）
+
+实践中：
+-> FM可以做特征组合，但是计算量大，一般只考虑2阶特征组合
+
+-> 如何既考虑低阶（1阶+2阶），又能考虑到高阶特征则采用DeepFM = Deep + FM。为更好的模拟真实世界中的影响因素，DeepFM采用了FM+DNN的方式，在低阶和高阶特征组合上更接近真实世界，因此效果也更好很多特征，在高阶情况下，人很难理解，但是机器可以发现规律（使用DNN模型）。
+
+DeepFM方法：
+   1) 提取低阶(low order)特征 => 因子分解机FM,既可以做1阶特征建模，也可以做2阶特征建模
+   2) 提取高阶(high order)特征 => 神经网络DNN
+   3) 在DeepFM模型中，为了防止过拟合，在FM部分采取L2_norm正则，在DNN部分采取dropout。
+
+
+DeepFM模型主要特点：
+
+端到端模型，无需特征工程；
+加强低阶特征组合和高阶特征组合之间的联系,共享特征输入。对于特征i，wi是1阶特征的权重，Vi表示该特征与其他特征的交互影响，输入到FM模型中可以获得特征的2阶特征表示，输入到DNN模型得到高阶特征： Y = sigmoid(YFM + YDNN)；
+将FM模型和DNN模型进行组合，并结合Wide&Deep的思想，使用FM代替Wide部分，并共享隐藏输入部分。
+
+DNN部分是简单的全连接网络，但是其中使用的输入：Dense Embeddings，与上述FM部分的是同一层。DNN与FM的Dense Embedding共享（Dense Embeddings在FM部分为了计算二阶特征交叉，而在DNN部分为了当做DNN的输入数据），这也是DeepFM与Wide&Deep模型最大的不同之处。
+
+
+
+Thinking 4 Surprise工具中的baseline算法原理是怎样的？BaselineOnly和KNNBaseline有什么区别？
+1、能简要说明baseline的原理（5points)
+2、能简要说明BaselineOnly和KNNBaseline的区别（5points)
+
+原理： bui = u + bu + bi 预估模型方程. 
+bui:estimating value
+u: overall average rating
+bu / bi: indicate the observed deviations of user u and item i respectively
+target: strives to find bus and bis that fit the given ratings
+avoid overfitting: regularizing term by penalizing the magnitudes of the parameters
+
+方法都是ALS
+Step1，固定bu，优化bi
+Step2，固定bi，优化bu
+
+区别：
+1. KNNBaseline（基于领域），大框架是基于领域来进行预估，方法直接，容易实现，可解释性好
+2. BaselineOnly则是直接计算
+
+
+Thinking 5 基于邻域的协同过滤都有哪些算法，请简述原理.
+
+1、能说出两种不同的基于邻域的协同过滤的算法（5points）
+2、这些算法之间的区别和作用（5pionts）
+
+请参见附件“基于邻域的协同过滤的算法和原理.jpeg”
